@@ -40,6 +40,15 @@ namespace Checksum
         #endregion
     }
 
+    public struct CommandLine
+    {
+        public bool SuppressConsoleOutput;
+        public bool SuppressFileOutput;
+        public bool SuppressErrors;
+        public string OutputPath;
+        public string[] InputPaths;
+    }
+
     public static class Program
     {
         #region Constants and Fields
@@ -50,6 +59,8 @@ namespace Checksum
         private static readonly HashAlgorithm HashProviderSha1 = new SHA1CryptoServiceProvider();
         private static readonly HashAlgorithm HashProviderSha256 = new SHA256CryptoServiceProvider();
         private static readonly HashAlgorithm HashProviderSha512 = new SHA512CryptoServiceProvider();
+
+        private static CommandLine CommandLine;
 
         #endregion
 
@@ -63,19 +74,31 @@ namespace Checksum
                 return;
             }
 
+            CommandLine = ParseCommandLineArguments(args);
+
             // For further iterations which allow setting the output file path.
             // Until then, setting to null will bypass this path and use the default output file.
-            string OutputPath = null;
+            string OutputPath = CommandLine.OutputPath;
             FileSignature CurrentSignature;
 
             using (StreamWriter OutputWriter = new StreamWriter(File.Create(OutputPath ?? DEFAULT_OUTPUT_FILENAME)))
             {
-                foreach (string Path in args.Where(File.Exists))
+                foreach (string Path in CommandLine.InputPaths)
                 {
+                    if (IsDirectory(Path))
+                    {
+                        // Directories are currently unsupported.
+                        // In future, directories will be traversed and hashes will be produced for each file in the tree
+                        PrintError("Directories are currently unsupported.");
+                        continue;
+                    }
+
                     CurrentSignature = CreateFileSignature(Path);
 
-                    PrintFileSignature(CurrentSignature);
-                    WriteFileSignature(CurrentSignature, OutputWriter);
+                    if (!CommandLine.SuppressFileOutput)
+                        PrintFileSignature(CurrentSignature);
+                    if (!CommandLine.SuppressConsoleOutput)
+                        WriteFileSignature(CurrentSignature, OutputWriter);
                 }
             }
         }
@@ -138,9 +161,51 @@ namespace Checksum
             return BitConverter.ToString(hash).Replace('-', ' ');
         }
 
+        private static CommandLine ParseCommandLineArguments(string[] args)
+        {
+            // Quick and Dirty command line parser implementation.
+            // Far from fully functioning or "standard" compliant.
+            // TODO: Replace with a more robust solution to command line parsing.
+
+            CommandLine Arguments = new CommandLine();
+
+            List<string> FilePaths = new List<string>();
+            List<string> LongArgs = new List<string>();
+            string ShortArgs = "";
+
+            foreach (string Argument in args)
+            {
+                if (Argument.StartsWith("--"))
+                    LongArgs.Add(Argument.TrimStart('-'));
+                else if (Argument.StartsWith("-"))
+                    ShortArgs += Argument.TrimStart('-');
+                else
+                    FilePaths.Add(Argument);
+            }
+
+            // Arguments are hard coded for the time being.
+            Arguments.SuppressConsoleOutput = ShortArgs.Contains("c") || LongArgs.Contains("SuppressConsole", StringComparer.OrdinalIgnoreCase);
+            Arguments.SuppressFileOutput = ShortArgs.Contains("f") || LongArgs.Contains("SuppressFile", StringComparer.OrdinalIgnoreCase);
+            Arguments.SuppressErrors = ShortArgs.Contains("e") || LongArgs.Contains("SuppressErrors", StringComparer.OrdinalIgnoreCase);
+
+            foreach (string Argument in LongArgs)
+            {
+                if (Argument.StartsWith("output", StringComparison.OrdinalIgnoreCase) &&
+                    Argument.Contains("="))
+                {
+                    Arguments.OutputPath = Argument.Split('=')[1];
+                }
+            }
+
+            Arguments.InputPaths = FilePaths.ToArray();
+
+            return Arguments;
+        }
+
         private static void PrintError(string message)
         {
-            Console.Error.WriteLine(message);
+            if (!CommandLine.SuppressErrors)
+                Console.Error.WriteLine(message);
             Debug.WriteLine($"--- Error: {message}");
         }
 
@@ -153,6 +218,11 @@ namespace Checksum
         {
         }
 
+        private static bool IsDirectory(string path)
+        {
+            return File.GetAttributes(path).HasFlag(FileAttributes.Directory);
+        }
+
         private static void WriteFileSignature(FileSignature signature, TextWriter writer)
         {
             writer.WriteLine($"\"{signature.Path}\" ({signature.Size:n0} bytes)");
@@ -160,6 +230,7 @@ namespace Checksum
             foreach (string Hash in signature.Hashes.Keys)
                 writer.WriteLine($"    {Hash,-10}{FormatHash(signature.Hashes[Hash])}");
         }
+
 
         #endregion
     }
