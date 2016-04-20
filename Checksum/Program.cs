@@ -21,10 +21,10 @@
 #endregion
 
 using System;
-using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Diagnostics;
+using System.Collections.Generic;
 using System.Security.Cryptography;
 
 namespace Checksum
@@ -42,11 +42,15 @@ namespace Checksum
 
     public struct CommandLine
     {
+        #region Constants and Fields
+
         public bool SuppressConsoleOutput;
         public bool SuppressFileOutput;
         public bool SuppressErrors;
         public string OutputPath;
         public string[] InputPaths;
+
+        #endregion
     }
 
     public static class Program
@@ -76,8 +80,6 @@ namespace Checksum
 
             CommandLine = ParseCommandLineArguments(args);
 
-            // For further iterations which allow setting the output file path.
-            // Until then, setting to null will bypass this path and use the default output file.
             string OutputPath = CommandLine.OutputPath;
             FileSignature CurrentSignature;
 
@@ -230,7 +232,6 @@ namespace Checksum
             foreach (string Hash in signature.Hashes.Keys)
                 writer.WriteLine($"    {Hash,-10}{FormatHash(signature.Hashes[Hash])}");
         }
-
 
         #endregion
     }
