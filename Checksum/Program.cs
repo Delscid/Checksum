@@ -63,7 +63,7 @@ namespace Checksum
                 return;
             }
 
-            // For further itterations which allow setting the output file path.
+            // For further iterations which allow setting the output file path.
             // Until then, setting to null will bypass this path and use the default output file.
             string OutputPath = null;
             FileSignature CurrentSignature;
