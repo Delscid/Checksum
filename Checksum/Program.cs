@@ -15,16 +15,16 @@
 // limitations under the License.
 //
 //  Filename:  Program.cs
-//  Modified:  20/04/2016
+//  Modified:  06/08/2016
 //  Created:   20/04/2016
 
 #endregion
 
 using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Diagnostics;
-using System.Collections.Generic;
 using System.Security.Cryptography;
 
 namespace Checksum
@@ -74,93 +74,99 @@ namespace Checksum
         {
             if (args.Length == 0)
             {
-                PrintHelpText();
+                DisplayHelpText();
                 return;
             }
 
             CommandLine = ParseCommandLineArguments(args);
 
-            string OutputPath = CommandLine.OutputPath;
-            FileSignature CurrentSignature;
+            string outputPath = CommandLine.OutputPath;
+            FileSignature currentSignature;
 
-            using (StreamWriter OutputWriter = new StreamWriter(File.Create(OutputPath ?? DEFAULT_OUTPUT_FILENAME)))
+            using (var output = new StreamWriter(File.Create(outputPath ?? DEFAULT_OUTPUT_FILENAME)))
             {
-                foreach (string Path in CommandLine.InputPaths)
+                foreach (string path in CommandLine.InputPaths)
                 {
-                    if (IsDirectory(Path))
+                    if (IsDirectory(path))
                     {
                         // Directories are currently unsupported.
                         // In future, directories will be traversed and hashes will be produced for each file in the tree
-                        PrintError("Directories are currently unsupported.");
+                        DisplayError("Directories are currently unsupported.");
                         continue;
                     }
 
-                    CurrentSignature = CreateFileSignature(Path);
+                    currentSignature = CreateFileSignature(path);
 
                     if (!CommandLine.SuppressFileOutput)
-                        PrintFileSignature(CurrentSignature);
+                        DisplaySignature(currentSignature);
                     if (!CommandLine.SuppressConsoleOutput)
-                        WriteFileSignature(CurrentSignature, OutputWriter);
+                        WriteSignature(currentSignature, output);
                 }
             }
         }
 
+        /// <summary>
+        /// Generates a signature for a given file path.
+        /// </summary>
+        /// <param name="path">The path for which to generate a signature.</param>
+        /// <returns>A <see cref="Checksum.FileSignature"/> object containing the size and a set of hashes for the input path.</returns>
         private static FileSignature CreateFileSignature(string path)
         {
-            FileSignature Signature = new FileSignature();
+            var signature = new FileSignature();
 
             try
             {
-                Stream Stream = File.OpenRead(path);
+                Stream stream = File.OpenRead(path);
 
-                Signature.Path = path;
-                Signature.Size = Stream.Length;
+                signature.Path = path;
+                signature.Size = stream.Length;
 
                 // Assumes that the stream can read AND seek.
                 // Shouldn't crop up with the file stream opened successfully.
-                Signature.Hashes = new Dictionary<string, byte[]>
+                signature.Hashes = new Dictionary<string, byte[]>
                 {
-                    {"MD5", CalculateFileHash(Stream, HashProviderMd5)},
-                    {"SHA1", CalculateFileHash(Stream, HashProviderSha1)},
-                    {"SHA256", CalculateFileHash(Stream, HashProviderSha256)},
-                    {"SHA512", CalculateFileHash(Stream, HashProviderSha512)}
+                    {"MD5", CalculateFileHash(stream, HashProviderMd5)},
+                    {"SHA1", CalculateFileHash(stream, HashProviderSha1)},
+                    {"SHA256", CalculateFileHash(stream, HashProviderSha256)},
+                    {"SHA512", CalculateFileHash(stream, HashProviderSha512)}
                 };
 
-                Stream.Close();
+                stream.Close();
             }
             catch (FileNotFoundException)
             {
-                PrintError($"File not found. ({path})");
+                DisplayError($"File not found. ({path})");
             }
             catch (DirectoryNotFoundException)
             {
-                PrintError($"Directory not found. ({path})");
+                DisplayError($"Directory not found. ({path})");
             }
             catch (PathTooLongException)
             {
-                PrintError($"File path exceeds maximum length. ({path})");
+                DisplayError($"File path exceeds maximum length. ({path})");
             }
             catch (UnauthorizedAccessException)
             {
-                PrintError($"File access permission denied. ({path})");
+                DisplayError($"File access permission denied. ({path})");
             }
 
-            return Signature;
+            return signature;
         }
 
+        /// <summary>
+        /// Calculates a hash value for the data in a given stream using the given algorithm.
+        /// </summary>
+        /// <param name="stream">The stream containing the data to use.</param>
+        /// <param name="algorithm">The hashing algorithm to use.</param>
+        /// <returns>A byte array containing the hash bytes of the input stream.</returns>
         private static byte[] CalculateFileHash(Stream stream, HashAlgorithm algorithm)
         {
-            byte[] Hash = algorithm.ComputeHash(stream);
+            byte[] hash = algorithm.ComputeHash(stream);
 
             // Prevents further hashing algorithms from failing due to incorrect stream position.
             stream.Seek(0, SeekOrigin.Begin);
 
-            return Hash;
-        }
-
-        private static string FormatHash(byte[] hash)
-        {
-            return BitConverter.ToString(hash).Replace('-', ' ');
+            return hash;
         }
 
         private static CommandLine ParseCommandLineArguments(string[] args)
@@ -169,68 +175,92 @@ namespace Checksum
             // Far from fully functioning or "standard" compliant.
             // TODO: Replace with a more robust solution to command line parsing.
 
-            CommandLine Arguments = new CommandLine();
+            var arguments = new CommandLine();
 
-            List<string> FilePaths = new List<string>();
-            List<string> LongArgs = new List<string>();
-            string ShortArgs = "";
+            List<string> filePaths = new List<string>();
+            List<string> longArgs = new List<string>();
+            var shortArgs = "";
 
-            foreach (string Argument in args)
+            foreach (string argument in args)
             {
-                if (Argument.StartsWith("--"))
-                    LongArgs.Add(Argument.TrimStart('-'));
-                else if (Argument.StartsWith("-"))
-                    ShortArgs += Argument.TrimStart('-');
+                if (argument.StartsWith("--"))
+                    longArgs.Add(argument.TrimStart('-'));
+                else if (argument.StartsWith("-"))
+                    shortArgs += argument.TrimStart('-');
                 else
-                    FilePaths.Add(Argument);
+                    filePaths.Add(argument);
             }
 
             // Arguments are hard coded for the time being.
-            Arguments.SuppressConsoleOutput = ShortArgs.Contains("c") || LongArgs.Contains("SuppressConsole", StringComparer.OrdinalIgnoreCase);
-            Arguments.SuppressFileOutput = ShortArgs.Contains("f") || LongArgs.Contains("SuppressFile", StringComparer.OrdinalIgnoreCase);
-            Arguments.SuppressErrors = ShortArgs.Contains("e") || LongArgs.Contains("SuppressErrors", StringComparer.OrdinalIgnoreCase);
+            arguments.SuppressConsoleOutput = shortArgs.Contains("c") || longArgs.Contains("SuppressConsole", StringComparer.OrdinalIgnoreCase);
+            arguments.SuppressFileOutput = shortArgs.Contains("f") || longArgs.Contains("SuppressFile", StringComparer.OrdinalIgnoreCase);
+            arguments.SuppressErrors = shortArgs.Contains("e") || longArgs.Contains("SuppressErrors", StringComparer.OrdinalIgnoreCase);
 
-            foreach (string Argument in LongArgs)
+            foreach (string argument in longArgs)
             {
-                if (Argument.StartsWith("output", StringComparison.OrdinalIgnoreCase) &&
-                    Argument.Contains("="))
+                if (argument.StartsWith("output", StringComparison.OrdinalIgnoreCase) &&
+                    argument.Contains("="))
                 {
-                    Arguments.OutputPath = Argument.Split('=')[1];
+                    arguments.OutputPath = argument.Split('=')[1];
                 }
             }
 
-            Arguments.InputPaths = FilePaths.ToArray();
+            arguments.InputPaths = filePaths.ToArray();
 
-            return Arguments;
+            return arguments;
         }
 
-        private static void PrintError(string message)
+        /// <summary>
+        /// Writes a message to <see cref="System.Console" /> and <see cref="System.Diagnostics.Debug"/>.
+        /// </summary>
+        /// <remarks>If console output has been supressed, the message will only be written to <see cref="System.Diagnostics.Debug"/>.</remarks>
+        /// <param name="message">The message to display.</param>
+        private static void DisplayError(string message)
         {
             if (!CommandLine.SuppressErrors)
                 Console.Error.WriteLine(message);
             Debug.WriteLine($"--- Error: {message}");
         }
 
-        private static void PrintFileSignature(FileSignature signature)
+        /// <summary>
+        /// Writes a formatted file signature to <see cref="System.Console"/>.
+        /// </summary>
+        /// <param name="signature">The file signature to display.</param>
+        private static void DisplaySignature(FileSignature signature)
         {
-            WriteFileSignature(signature, Console.Out);
+            WriteSignature(signature, Console.Out);
         }
 
-        private static void PrintHelpText()
+        private static void DisplayHelpText()
         {
         }
 
+        /// <summary>
+        /// Writes a formatted file signature to a given <see cref="System.IO.TextWriter"/>
+        /// </summary>
+        /// <param name="signature">The file signature to display.</param>
+        /// <param name="writer">The <see cref="System.IO.TextWriter"/> to use.</param>
+        private static void WriteSignature(FileSignature signature, TextWriter writer)
+        {
+            writer.WriteLine($"\"{signature.Path}\" ({signature.Size:n0} bytes)");
+
+            foreach (string hash in signature.Hashes.Keys)
+                writer.WriteLine($"    {hash,-10}{FormatHash(signature.Hashes[hash])}");
+        }
+
+        /// <summary>
+        /// Checks if a given path is a directory.
+        /// </summary>
+        /// <param name="path">The path to check.</param>
+        /// <returns>True if the path points to a directory, otherwise False.</returns>
         private static bool IsDirectory(string path)
         {
             return File.GetAttributes(path).HasFlag(FileAttributes.Directory);
         }
 
-        private static void WriteFileSignature(FileSignature signature, TextWriter writer)
+        private static string FormatHash(byte[] hash)
         {
-            writer.WriteLine($"\"{signature.Path}\" ({signature.Size:n0} bytes)");
-
-            foreach (string Hash in signature.Hashes.Keys)
-                writer.WriteLine($"    {Hash,-10}{FormatHash(signature.Hashes[Hash])}");
+            return BitConverter.ToString(hash).Replace('-', ' ');
         }
 
         #endregion
