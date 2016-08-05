@@ -97,9 +97,9 @@ namespace Checksum
 
                     currentSignature = CreateFileSignature(path);
 
-                    if (!CommandLine.SuppressFileOutput)
-                        DisplaySignature(currentSignature);
                     if (!CommandLine.SuppressConsoleOutput)
+                        DisplaySignature(currentSignature);
+                    if (!CommandLine.SuppressFileOutput)
                         WriteSignature(currentSignature, output);
                 }
             }
