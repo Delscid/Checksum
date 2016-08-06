@@ -1,22 +1,22 @@
 ﻿#region Copyright 2016 Shane Delany
 
 // Copyright 2016 Shane Delany
-//
+// 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-//
+// 
 //     http://www.apache.org/licenses/LICENSE-2.0
-//
+// 
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
+// 
 //  Filename:  Program.cs
 //  Modified:  06/08/2016
-//  Created:   20/04/2016
+//  Created:   06/08/2016
 
 #endregion
 
@@ -90,7 +90,7 @@ namespace Checksum
                     if (IsDirectory(path))
                     {
                         // Directories are currently unsupported.
-                        // In future, directories will be traversed and hashes will be produced for each file in the tree
+                        // In future, directories will be traversed and signatures will be produced for each file in the tree
                         DisplayError("Directories are currently unsupported.");
                         continue;
                     }
@@ -255,7 +255,14 @@ namespace Checksum
         /// <returns>True if the path points to a directory, otherwise False.</returns>
         private static bool IsDirectory(string path)
         {
-            return File.GetAttributes(path).HasFlag(FileAttributes.Directory);
+            try
+            {
+                return File.GetAttributes(path).HasFlag(FileAttributes.Directory);
+            }
+            catch (Exception)
+            {
+                return false;
+            }
         }
 
         private static string FormatHash(byte[] hash)
