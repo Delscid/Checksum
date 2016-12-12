@@ -1,21 +1,21 @@
 ﻿#region Copyright 2016 Shane Delany
 
 // Copyright 2016 Shane Delany
-// 
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
-// 
+//
 //     http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-// 
+//
 //  Filename:  Program.cs
-//  Modified:  06/08/2016
+//  Modified:  12/12/2016
 //  Created:   06/08/2016
 
 #endregion
@@ -74,33 +74,32 @@ namespace Checksum
         {
             if (args.Length == 0)
             {
-                DisplayHelpText();
+                Program.DisplayHelpText();
                 return;
             }
 
-            CommandLine = ParseCommandLineArguments(args);
+            Program.CommandLine = Program.ParseCommandLineArguments(args);
 
-            string outputPath = CommandLine.OutputPath;
-            FileSignature currentSignature;
+            string outputPath = Program.CommandLine.OutputPath;
 
-            using (var output = new StreamWriter(File.Create(outputPath ?? DEFAULT_OUTPUT_FILENAME)))
+            using (var output = new StreamWriter(File.Create(outputPath ?? Program.DEFAULT_OUTPUT_FILENAME)))
             {
-                foreach (string path in CommandLine.InputPaths)
+                foreach (string path in Program.CommandLine.InputPaths)
                 {
-                    if (IsDirectory(path))
+                    if (Program.IsDirectory(path))
                     {
                         // Directories are currently unsupported.
                         // In future, directories will be traversed and signatures will be produced for each file in the tree
-                        DisplayError("Directories are currently unsupported.");
+                        Program.DisplayError("Directories are currently unsupported.");
                         continue;
                     }
 
-                    currentSignature = CreateFileSignature(path);
+                    FileSignature currentSignature = Program.CreateFileSignature(path);
 
-                    if (!CommandLine.SuppressConsoleOutput)
-                        DisplaySignature(currentSignature);
-                    if (!CommandLine.SuppressFileOutput)
-                        WriteSignature(currentSignature, output);
+                    if (!Program.CommandLine.SuppressConsoleOutput)
+                        Program.DisplaySignature(currentSignature);
+                    if (!Program.CommandLine.SuppressFileOutput)
+                        Program.WriteSignature(currentSignature, output);
                 }
             }
         }
@@ -116,38 +115,34 @@ namespace Checksum
 
             try
             {
-                Stream stream = File.OpenRead(path);
+                byte[] contents = File.ReadAllBytes(path);
 
                 signature.Path = path;
-                signature.Size = stream.Length;
+                signature.Size = contents.Length;
 
-                // Assumes that the stream can read AND seek.
-                // Shouldn't crop up with the file stream opened successfully.
                 signature.Hashes = new Dictionary<string, byte[]>
                 {
-                    {"MD5", CalculateFileHash(stream, HashProviderMd5)},
-                    {"SHA1", CalculateFileHash(stream, HashProviderSha1)},
-                    {"SHA256", CalculateFileHash(stream, HashProviderSha256)},
-                    {"SHA512", CalculateFileHash(stream, HashProviderSha512)}
+                    {"MD5", Program.CalculateFileHash(contents, Program.HashProviderMd5)},
+                    {"SHA1", Program.CalculateFileHash(contents, Program.HashProviderSha1)},
+                    {"SHA256", Program.CalculateFileHash(contents, Program.HashProviderSha256)},
+                    {"SHA512", Program.CalculateFileHash(contents, Program.HashProviderSha512)}
                 };
-
-                stream.Close();
             }
             catch (FileNotFoundException)
             {
-                DisplayError($"File not found. ({path})");
+                Program.DisplayError($"File not found. ({path})");
             }
             catch (DirectoryNotFoundException)
             {
-                DisplayError($"Directory not found. ({path})");
+                Program.DisplayError($"Directory not found. ({path})");
             }
             catch (PathTooLongException)
             {
-                DisplayError($"File path exceeds maximum length. ({path})");
+                Program.DisplayError($"File path exceeds maximum length. ({path})");
             }
             catch (UnauthorizedAccessException)
             {
-                DisplayError($"File access permission denied. ({path})");
+                Program.DisplayError($"File access permission denied. ({path})");
             }
 
             return signature;
@@ -156,23 +151,15 @@ namespace Checksum
         /// <summary>
         /// Calculates a hash value for the data in a given stream using the given algorithm.
         /// </summary>
-        /// <param name="stream">The stream containing the data to use.</param>
+        /// <param name="data">The data to hash.</param>
         /// <param name="algorithm">The hashing algorithm to use.</param>
         /// <returns>A byte array containing the hash bytes of the input stream.</returns>
-        private static byte[] CalculateFileHash(Stream stream, HashAlgorithm algorithm)
-        {
-            byte[] hash = algorithm.ComputeHash(stream);
-
-            // Prevents further hashing algorithms from failing due to incorrect stream position.
-            stream.Seek(0, SeekOrigin.Begin);
-
-            return hash;
-        }
+        private static byte[] CalculateFileHash(byte[] data, HashAlgorithm algorithm) => algorithm.ComputeHash(data);
 
         private static CommandLine ParseCommandLineArguments(string[] args)
         {
             // Quick and Dirty command line parser implementation.
-            // Far from fully functioning or "standard" compliant.
+            // Far from fully functioning or "standard compliant".
             // TODO: Replace with a more robust solution to command line parsing.
 
             var arguments = new CommandLine();
@@ -217,7 +204,7 @@ namespace Checksum
         /// <param name="message">The message to display.</param>
         private static void DisplayError(string message)
         {
-            if (!CommandLine.SuppressErrors)
+            if (!Program.CommandLine.SuppressErrors)
                 Console.Error.WriteLine(message);
             Debug.WriteLine($"--- Error: {message}");
         }
@@ -226,10 +213,7 @@ namespace Checksum
         /// Writes a formatted file signature to <see cref="System.Console"/>.
         /// </summary>
         /// <param name="signature">The file signature to display.</param>
-        private static void DisplaySignature(FileSignature signature)
-        {
-            WriteSignature(signature, Console.Out);
-        }
+        private static void DisplaySignature(FileSignature signature) => Program.WriteSignature(signature, Console.Out);
 
         private static void DisplayHelpText()
         {
@@ -245,7 +229,7 @@ namespace Checksum
             writer.WriteLine($"\"{signature.Path}\" ({signature.Size:n0} bytes)");
 
             foreach (string hash in signature.Hashes.Keys)
-                writer.WriteLine($"    {hash,-10}{FormatHash(signature.Hashes[hash])}");
+                writer.WriteLine($"    {hash,-10}{Program.FormatHash(signature.Hashes[hash])}");
         }
 
         /// <summary>
@@ -265,10 +249,7 @@ namespace Checksum
             }
         }
 
-        private static string FormatHash(byte[] hash)
-        {
-            return BitConverter.ToString(hash).Replace('-', ' ');
-        }
+        private static string FormatHash(byte[] hash) => BitConverter.ToString(hash).Replace('-', ' ');
 
         #endregion
     }

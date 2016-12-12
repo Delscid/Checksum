@@ -1,4 +1,8 @@
 # Checksum
 
-A simple light-weight checksum tool to help with command-line checksum interaction in Windows without installing anything.
-Designed to be a portable utility, with as few external dependencies as possible.
+A simple light-weight checksum tool to help with command-line checksum generation
+in Windows without installing anything.
+
+The tool is designed to be portable with as few dependencies and associated files
+as possible, currently it does not work on other platforms however it may be ported
+to .Net Core in the future. 
