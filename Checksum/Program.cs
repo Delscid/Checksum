@@ -53,10 +53,7 @@ namespace Checksum
 
         public override bool Equals(object obj)
         {
-            if (ReferenceEquals(null, obj))
-                return false;
-
-            return obj is FileSignature other && Equals(other);
+            return !ReferenceEquals(null, obj) && obj is FileSignature other && Equals(other);
         }
 
         public override int GetHashCode()
@@ -74,13 +71,13 @@ namespace Checksum
     public struct CommandLine
         : IEquatable<CommandLine>
     {
-        public CommandLine(bool suppressConsoleOutput = false, bool suppressFileOutput = false, bool suppressErrors = false, string outputPath = null, string[] inputPaths = null)
+        public CommandLine(bool suppressConsoleOutput, bool suppressFileOutput, bool suppressErrors, string outputPath, IEnumerable<string> inputPaths)
         {
             SuppressConsoleOutput = suppressConsoleOutput;
             SuppressFileOutput = suppressFileOutput;
             SuppressErrors = suppressErrors;
             OutputPath = outputPath;
-            InputPaths = inputPaths;
+            InputPaths = inputPaths.ToArray();
         }
 
         public bool SuppressConsoleOutput { get; }
@@ -100,10 +97,7 @@ namespace Checksum
 
         public override bool Equals(object obj)
         {
-            if (ReferenceEquals(null, obj))
-                return false;
-
-            return obj is CommandLine other && Equals(other);
+            return !ReferenceEquals(null, obj) && obj is CommandLine other && Equals(other);
         }
 
         public override int GetHashCode()
@@ -183,7 +177,7 @@ namespace Checksum
             {
                 byte[] contents = File.ReadAllBytes(path);
 
-                signature = new FileSignature(path, contents.Length, new Dictionary<string, byte[]>()
+                signature = new FileSignature(path, contents.Length, new Dictionary<string, byte[]>
                 {
                     {"MD5", CalculateFileHash(contents, HashProviderMd5)},
                     {"SHA1", CalculateFileHash(contents, HashProviderSha1)},
@@ -272,7 +266,9 @@ namespace Checksum
             Debug.WriteLine($"--- Error: {message}");
 
             if (CommandLine.SuppressErrors)
+            {
                 return;
+            }
 
             Console.Error.WriteLine(message);
             Environment.Exit(1);
