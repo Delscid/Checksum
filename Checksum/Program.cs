@@ -1,6 +1,6 @@
-﻿#region Copyright 2016 Shane Delany
+﻿#region Copyright 2018 Shane Delany
 
-// Copyright 2016 Shane Delany
+// Copyright 2018 Shane Delany
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
 // limitations under the License.
 //
 //  Filename:  Program.cs
-//  Modified:  12/12/2016
+//  Modified:  18/12/2018
 //  Created:   06/08/2016
 
 #endregion
@@ -26,38 +26,103 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
+using System.Text;
 
 namespace Checksum
 {
     public struct FileSignature
+        : IEquatable<FileSignature>
     {
-        #region Constants and Fields
+        public FileSignature(string path, long size, Dictionary<string, byte[]> hashes)
+        {
+            Path = path;
+            Size = size;
+            Hashes = hashes;
+        }
 
-        public string Path;
-        public long Size;
-        public Dictionary<string, byte[]> Hashes;
+        public string Path { get; }
 
-        #endregion
+        public long Size { get; }
+
+        public Dictionary<string, byte[]> Hashes { get; }
+
+        public bool Equals(FileSignature other)
+        {
+            return String.Equals(Path, other.Path, StringComparison.OrdinalIgnoreCase) && Size == other.Size && Hashes.Equals(other.Hashes);
+        }
+
+        public override bool Equals(object obj)
+        {
+            if (ReferenceEquals(null, obj))
+                return false;
+
+            return obj is FileSignature other && Equals(other);
+        }
+
+        public override int GetHashCode()
+        {
+            unchecked
+            {
+                int hashCode = StringComparer.OrdinalIgnoreCase.GetHashCode(Path);
+                hashCode = (hashCode * 397) ^ Size.GetHashCode();
+                hashCode = (hashCode * 397) ^ Hashes.GetHashCode();
+                return hashCode;
+            }
+        }
     }
 
     public struct CommandLine
+        : IEquatable<CommandLine>
     {
-        #region Constants and Fields
+        public CommandLine(bool suppressConsoleOutput = false, bool suppressFileOutput = false, bool suppressErrors = false, string outputPath = null, string[] inputPaths = null)
+        {
+            SuppressConsoleOutput = suppressConsoleOutput;
+            SuppressFileOutput = suppressFileOutput;
+            SuppressErrors = suppressErrors;
+            OutputPath = outputPath;
+            InputPaths = inputPaths;
+        }
 
-        public bool SuppressConsoleOutput;
-        public bool SuppressFileOutput;
-        public bool SuppressErrors;
-        public string OutputPath;
-        public string[] InputPaths;
+        public bool SuppressConsoleOutput { get; }
 
-        #endregion
+        public bool SuppressFileOutput { get; }
+
+        public bool SuppressErrors { get; }
+
+        public string OutputPath { get; }
+
+        public string[] InputPaths { get; }
+
+        public bool Equals(CommandLine other)
+        {
+            return SuppressConsoleOutput == other.SuppressConsoleOutput && SuppressFileOutput == other.SuppressFileOutput && SuppressErrors == other.SuppressErrors && String.Equals(OutputPath, other.OutputPath) && InputPaths.Equals(other.InputPaths);
+        }
+
+        public override bool Equals(object obj)
+        {
+            if (ReferenceEquals(null, obj))
+                return false;
+
+            return obj is CommandLine other && Equals(other);
+        }
+
+        public override int GetHashCode()
+        {
+            unchecked
+            {
+                int hashCode = SuppressConsoleOutput.GetHashCode();
+                hashCode = (hashCode * 397) ^ SuppressFileOutput.GetHashCode();
+                hashCode = (hashCode * 397) ^ SuppressErrors.GetHashCode();
+                hashCode = (hashCode * 397) ^ OutputPath.GetHashCode();
+                hashCode = (hashCode * 397) ^ InputPaths.GetHashCode();
+                return hashCode;
+            }
+        }
     }
 
     public static class Program
     {
-        #region Constants and Fields
-
-        private const string DEFAULT_OUTPUT_FILENAME = "checksum.txt";
+        private const string DefaultOutputFilename = "checksum.txt";
 
         private static readonly HashAlgorithm HashProviderMd5 = new MD5CryptoServiceProvider();
         private static readonly HashAlgorithm HashProviderSha1 = new SHA1CryptoServiceProvider();
@@ -66,40 +131,41 @@ namespace Checksum
 
         private static CommandLine CommandLine;
 
-        #endregion
-
-        #region Methods
-
         public static void Main(string[] args)
         {
             if (args.Length == 0)
             {
-                Program.DisplayHelpText();
+                DisplayHelpText();
                 return;
             }
 
-            Program.CommandLine = Program.ParseCommandLineArguments(args);
+            CommandLine = ParseCommandLineArguments(args);
 
-            string outputPath = Program.CommandLine.OutputPath;
+            string outputPath = CommandLine.OutputPath;
 
-            using (var output = new StreamWriter(File.Create(outputPath ?? Program.DEFAULT_OUTPUT_FILENAME)))
+            using (var output = new StreamWriter(File.Create(outputPath ?? DefaultOutputFilename)))
             {
-                foreach (string path in Program.CommandLine.InputPaths)
+                foreach (string path in CommandLine.InputPaths)
                 {
-                    if (Program.IsDirectory(path))
+                    if (IsDirectory(path))
                     {
                         // Directories are currently unsupported.
                         // In future, directories will be traversed and signatures will be produced for each file in the tree
-                        Program.DisplayError("Directories are currently unsupported.");
+                        DisplayError("Directories are currently unsupported.");
                         continue;
                     }
 
-                    FileSignature currentSignature = Program.CreateFileSignature(path);
+                    FileSignature currentSignature = CreateFileSignature(path);
 
-                    if (!Program.CommandLine.SuppressConsoleOutput)
-                        Program.DisplaySignature(currentSignature);
-                    if (!Program.CommandLine.SuppressFileOutput)
-                        Program.WriteSignature(currentSignature, output);
+                    if (!CommandLine.SuppressConsoleOutput)
+                    {
+                        DisplaySignature(currentSignature);
+                    }
+
+                    if (!CommandLine.SuppressFileOutput)
+                    {
+                        WriteSignature(currentSignature, output);
+                    }
                 }
             }
         }
@@ -111,38 +177,35 @@ namespace Checksum
         /// <returns>A <see cref="Checksum.FileSignature"/> object containing the size and a set of hashes for the input path.</returns>
         private static FileSignature CreateFileSignature(string path)
         {
-            var signature = new FileSignature();
+            FileSignature signature = default(FileSignature);
 
             try
             {
                 byte[] contents = File.ReadAllBytes(path);
 
-                signature.Path = path;
-                signature.Size = contents.Length;
-
-                signature.Hashes = new Dictionary<string, byte[]>
+                signature = new FileSignature(path, contents.Length, new Dictionary<string, byte[]>()
                 {
-                    {"MD5", Program.CalculateFileHash(contents, Program.HashProviderMd5)},
-                    {"SHA1", Program.CalculateFileHash(contents, Program.HashProviderSha1)},
-                    {"SHA256", Program.CalculateFileHash(contents, Program.HashProviderSha256)},
-                    {"SHA512", Program.CalculateFileHash(contents, Program.HashProviderSha512)}
-                };
+                    {"MD5", CalculateFileHash(contents, HashProviderMd5)},
+                    {"SHA1", CalculateFileHash(contents, HashProviderSha1)},
+                    {"SHA256", CalculateFileHash(contents, HashProviderSha256)},
+                    {"SHA512", CalculateFileHash(contents, HashProviderSha512)}
+                });
             }
             catch (FileNotFoundException)
             {
-                Program.DisplayError($"File not found. ({path})");
+                DisplayError($"File not found. ({path})");
             }
             catch (DirectoryNotFoundException)
             {
-                Program.DisplayError($"Directory not found. ({path})");
+                DisplayError($"Directory not found. ({path})");
             }
             catch (PathTooLongException)
             {
-                Program.DisplayError($"File path exceeds maximum length. ({path})");
+                DisplayError($"File path exceeds maximum length. ({path})");
             }
             catch (UnauthorizedAccessException)
             {
-                Program.DisplayError($"File access permission denied. ({path})");
+                DisplayError($"File access permission denied. ({path})");
             }
 
             return signature;
@@ -162,58 +225,64 @@ namespace Checksum
             // Far from fully functioning or "standard compliant".
             // TODO: Replace with a more robust solution to command line parsing.
 
-            var arguments = new CommandLine();
-
             List<string> filePaths = new List<string>();
             List<string> longArgs = new List<string>();
-            var shortArgs = "";
+            StringBuilder shortArgs = new StringBuilder();
+            string outPath = "";
 
             foreach (string argument in args)
             {
                 if (argument.StartsWith("--"))
-                    longArgs.Add(argument.TrimStart('-'));
-                else if (argument.StartsWith("-"))
-                    shortArgs += argument.TrimStart('-');
-                else
-                    filePaths.Add(argument);
-            }
-
-            // Arguments are hard coded for the time being.
-            arguments.SuppressConsoleOutput = shortArgs.Contains("c") || longArgs.Contains("SuppressConsole", StringComparer.OrdinalIgnoreCase);
-            arguments.SuppressFileOutput = shortArgs.Contains("f") || longArgs.Contains("SuppressFile", StringComparer.OrdinalIgnoreCase);
-            arguments.SuppressErrors = shortArgs.Contains("e") || longArgs.Contains("SuppressErrors", StringComparer.OrdinalIgnoreCase);
-
-            foreach (string argument in longArgs)
-            {
-                if (argument.StartsWith("output", StringComparison.OrdinalIgnoreCase) &&
-                    argument.Contains("="))
                 {
-                    arguments.OutputPath = argument.Split('=')[1];
+                    longArgs.Add(argument.TrimStart('-'));
+                }
+                else if (argument.StartsWith("-"))
+                {
+                    shortArgs.Append(argument.TrimStart('-'));
+                }
+                else
+                {
+                    filePaths.Add(argument);
                 }
             }
 
-            arguments.InputPaths = filePaths.ToArray();
+            // Arguments are hard coded for the time being.
+            bool suppressConsoleOutput = shortArgs.ToString().Contains("c") || longArgs.Contains("SuppressConsole", StringComparer.OrdinalIgnoreCase);
+            bool suppressFileOutput = shortArgs.ToString().Contains("f") || longArgs.Contains("SuppressFile", StringComparer.OrdinalIgnoreCase);
+            bool suppressErrors = shortArgs.ToString().Contains("e") || longArgs.Contains("SuppressErrors", StringComparer.OrdinalIgnoreCase);
 
-            return arguments;
+            foreach (string argument in longArgs)
+            {
+                if (argument.StartsWith("output", StringComparison.OrdinalIgnoreCase) && argument.Contains("="))
+                {
+                    outPath = argument.Split('=')[1];
+                }
+            }
+
+            return new CommandLine(suppressConsoleOutput, suppressFileOutput, suppressErrors, outPath, filePaths.ToArray());
         }
 
         /// <summary>
         /// Writes a message to <see cref="System.Console" /> and <see cref="System.Diagnostics.Debug"/>.
         /// </summary>
-        /// <remarks>If console output has been supressed, the message will only be written to <see cref="System.Diagnostics.Debug"/>.</remarks>
+        /// <remarks>If console output has been suppressed, the message will only be written to <see cref="System.Diagnostics.Debug"/>.</remarks>
         /// <param name="message">The message to display.</param>
         private static void DisplayError(string message)
         {
-            if (!Program.CommandLine.SuppressErrors)
-                Console.Error.WriteLine(message);
             Debug.WriteLine($"--- Error: {message}");
+
+            if (CommandLine.SuppressErrors)
+                return;
+
+            Console.Error.WriteLine(message);
+            Environment.Exit(1);
         }
 
         /// <summary>
         /// Writes a formatted file signature to <see cref="System.Console"/>.
         /// </summary>
         /// <param name="signature">The file signature to display.</param>
-        private static void DisplaySignature(FileSignature signature) => Program.WriteSignature(signature, Console.Out);
+        private static void DisplaySignature(FileSignature signature) => WriteSignature(signature, Console.Out);
 
         private static void DisplayHelpText()
         {
@@ -229,7 +298,9 @@ namespace Checksum
             writer.WriteLine($"\"{signature.Path}\" ({signature.Size:n0} bytes)");
 
             foreach (string hash in signature.Hashes.Keys)
-                writer.WriteLine($"    {hash,-10}{Program.FormatHash(signature.Hashes[hash])}");
+            {
+                writer.WriteLine($"    {hash,-10}{FormatHash(signature.Hashes[hash])}");
+            }
         }
 
         /// <summary>
@@ -250,7 +321,5 @@ namespace Checksum
         }
 
         private static string FormatHash(byte[] hash) => BitConverter.ToString(hash).Replace('-', ' ');
-
-        #endregion
     }
 }
