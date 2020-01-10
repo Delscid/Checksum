@@ -51,7 +51,7 @@ namespace Checksum
             return String.Equals(Path, other.Path, StringComparison.OrdinalIgnoreCase) && Size == other.Size && Hashes.Equals(other.Hashes);
         }
 
-        public override bool Equals(object obj)
+        public override bool Equals(object? obj)
         {
             return !ReferenceEquals(null, obj) && obj is FileSignature other && Equals(other);
         }
@@ -95,7 +95,7 @@ namespace Checksum
             return SuppressConsoleOutput == other.SuppressConsoleOutput && SuppressFileOutput == other.SuppressFileOutput && SuppressErrors == other.SuppressErrors && String.Equals(OutputPath, other.OutputPath) && InputPaths.Equals(other.InputPaths);
         }
 
-        public override bool Equals(object obj)
+        public override bool Equals(object? obj)
         {
             return !ReferenceEquals(null, obj) && obj is CommandLine other && Equals(other);
         }
@@ -123,7 +123,7 @@ namespace Checksum
         private static readonly HashAlgorithm HashProviderSha256 = new SHA256CryptoServiceProvider();
         private static readonly HashAlgorithm HashProviderSha512 = new SHA512CryptoServiceProvider();
 
-        private static CommandLine CommandLine;
+        private static CommandLine _commandLine;
 
         public static void Main(string[] args)
         {
@@ -133,13 +133,13 @@ namespace Checksum
                 return;
             }
 
-            CommandLine = ParseCommandLineArguments(args);
+            _commandLine = ParseCommandLineArguments(args);
 
-            string outputPath = CommandLine.OutputPath;
+            string outputPath = _commandLine.OutputPath;
 
             using (var output = new StreamWriter(File.Create(outputPath ?? DefaultOutputFilename)))
             {
-                foreach (string path in CommandLine.InputPaths)
+                foreach (string path in _commandLine.InputPaths)
                 {
                     if (IsDirectory(path))
                     {
@@ -151,12 +151,12 @@ namespace Checksum
 
                     FileSignature currentSignature = CreateFileSignature(path);
 
-                    if (!CommandLine.SuppressConsoleOutput)
+                    if (!_commandLine.SuppressConsoleOutput)
                     {
                         DisplaySignature(currentSignature);
                     }
 
-                    if (!CommandLine.SuppressFileOutput)
+                    if (!_commandLine.SuppressFileOutput)
                     {
                         WriteSignature(currentSignature, output);
                     }
@@ -265,7 +265,7 @@ namespace Checksum
         {
             Debug.WriteLine($"--- Error: {message}");
 
-            if (CommandLine.SuppressErrors)
+            if (_commandLine.SuppressErrors)
             {
                 return;
             }
